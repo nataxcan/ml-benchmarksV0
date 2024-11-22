@@ -1,0 +1,1823 @@
+Directory tree of .py files:
+├── actfuns.py
+├── benchmarks.py
+├── cudagru/
+│   ├── gru.py
+│   └── setup.py
+├── dir_printer.py
+├── gputest.py
+├── models/
+│   ├── __init__.py
+│   ├── abl_grus.py
+│   ├── grus.py
+│   ├── llms.py
+│   ├── lstms.py
+│   ├── parallelgrus.py
+│   └── transformers.py
+
+Processing .py files:
+
+====================================================================================================
+
+File: actfuns.py
+Directory: .
+
+Content:
+import torch
+import torch.nn.functional as F
+import torch.nn as nn
+import matplotlib.pyplot as plt
+
+# Ensure GPU is available
+assert torch.cuda.is_available(), "CUDA is not available. Please check your CUDA installation."
+
+# List of activation functions to benchmark
+activation_functions = {
+    'ReLU': F.relu,
+    'Sigmoid': torch.sigmoid,
+    'Tanh': torch.tanh,
+    'LeakyReLU': F.leaky_relu,
+    'ELU': F.elu,
+    'SELU': F.selu,
+    'Softplus': F.softplus,
+    'GELU': F.gelu,
+    'Softsign': F.softsign,
+    'Softmax': lambda x: F.softmax(x, dim=-1),
+    'LogSoftmax': lambda x: F.log_softmax(x, dim=-1),
+    'LogSigmoid': torch.nn.LogSigmoid(),
+    'Hardtanh': F.hardtanh,
+    'PReLU': nn.PReLU().to('cuda'),
+    'RReLU': nn.RReLU(),
+    'Tanhshrink': F.tanhshrink,
+    'Softmin': lambda x: F.softmin(x, dim=-1),
+    'ReLU6': F.relu6,
+    'Softshrink': F.softshrink
+}
+
+# Input tensor
+input_tensor = torch.randn(1000, 1000, device='cuda')
+
+# Number of iterations
+num_iterations = 10
+
+# Dictionary to store the execution times
+execution_times = {}
+
+# Function to benchmark a single activation function
+def benchmark_activation(func, input_tensor, num_iterations):
+    with torch.no_grad():
+        start_event = torch.cuda.Event(enable_timing=True)
+        end_event = torch.cuda.Event(enable_timing=True)
+        
+        # Warm-up
+        for _ in range(1000):
+            _ = func(input_tensor)
+        
+        torch.cuda.synchronize()
+        start_event.record()
+        
+        for _ in range(num_iterations):
+            _ = func(input_tensor)
+        
+        end_event.record()
+        torch.cuda.synchronize()
+        
+        elapsed_time = start_event.elapsed_time(end_event)  # Time in milliseconds
+        return elapsed_time
+
+# Benchmark each activation function
+for name, func in activation_functions.items():
+    time_taken = benchmark_activation(func, input_tensor, num_iterations)
+    execution_times[name] = time_taken
+    print(f"{name}: {time_taken:.2f} ms")
+
+# Sorting the execution times
+sorted_execution_times = dict(sorted(execution_times.items(), key=lambda item: item[1]))
+
+# Plotting the results
+plt.figure(figsize=(12, 6))
+plt.bar(sorted_execution_times.keys(), sorted_execution_times.values(), color='skyblue')
+plt.xlabel('Activation Functions')
+plt.ylabel('Execution Time (ms)')
+plt.title('Execution Time of Activation Functions (1000 iterations on GPU)')
+plt.xticks(rotation=45)
+plt.grid(True)
+plt.savefig("actfuns.png")
+
+====================================================================================================
+
+
+====================================================================================================
+
+File: gputest.py
+Directory: .
+
+Content:
+import torch
+
+def list_cuda_devices():
+    if not torch.cuda.is_available():
+        print("No CUDA devices found.")
+        return
+
+    num_devices = torch.cuda.device_count()
+    print(f"Number of CUDA devices: {num_devices}")
+
+    for i in range(num_devices):
+        device_name = torch.cuda.get_device_name(i)
+        print(f"Device {i}: {device_name}")
+
+if __name__ == "__main__":
+    list_cuda_devices()
+
+====================================================================================================
+
+
+====================================================================================================
+
+File: dir_printer.py
+Directory: .
+
+Content:
+import os
+import sys
+
+def print_py_tree(directory, prefix=""):
+    contents = sorted(os.listdir(directory))
+    for i, item in enumerate(contents):
+        path = os.path.join(directory, item)
+        if os.path.isdir(path):
+            if i == len(contents) - 1:
+                print(f"{prefix}└── {item}/")
+                print_py_tree(path, prefix + "    ")
+            else:
+                print(f"{prefix}├── {item}/")
+                print_py_tree(path, prefix + "│   ")
+        elif item.endswith('.py'):
+            if i == len(contents) - 1:
+                print(f"{prefix}└── {item}")
+            else:
+                print(f"{prefix}├── {item}")
+
+def process_py_files(directory):
+    for root, _, files in os.walk(directory):
+        for file in files:
+            if file.endswith('.py'):
+                file_path = os.path.join(root, file)
+                print("\n" + "=" * 100 + "\n")
+                print(f"File: {file}")
+                print(f"Directory: {root}")
+                print("\nContent:")
+                with open(file_path, 'r') as f:
+                    print(f.read())
+                print("\n" + "=" * 100 + "\n")
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print("Usage: python script.py <directory_path>")
+        sys.exit(1)
+
+    directory = sys.argv[1]
+    if not os.path.isdir(directory):
+        print(f"Error: {directory} is not a valid directory")
+        sys.exit(1)
+
+    print("Directory tree of .py files:")
+    print_py_tree(directory)
+    print("\nProcessing .py files:")
+    process_py_files(directory)
+
+====================================================================================================
+
+
+====================================================================================================
+
+File: benchmarks.py
+Directory: .
+
+Content:
+
+
+====================================================================================================
+
+
+====================================================================================================
+
+File: setup.py
+Directory: ./cudagru
+
+Content:
+from setuptools import setup
+from torch.utils.cpp_extension import BuildExtension, CUDAExtension
+
+setup(
+    name='gru_cuda',
+    ext_modules=[
+        CUDAExtension('gru_cuda', [
+            'gru_cuda.cpp',
+            'gru_cuda_kernel.cu',
+        ]),
+    ],
+    cmdclass={
+        'build_ext': BuildExtension
+    })
+
+====================================================================================================
+
+
+====================================================================================================
+
+File: gru.py
+Directory: ./cudagru
+
+Content:
+import math
+from torch import nn
+from torch.autograd import Function
+import torch
+
+import gru_cuda
+
+torch.manual_seed(42)
+
+class GRUFunction(Function):
+    @staticmethod
+    def forward(ctx, input, x2h_w, h2h_w, x2h_b, h2h_b, old_h):
+        x = input.view(-1, input.size(1)).contiguous()
+        outputs = gru_cuda.forward(x, x2h_w, h2h_w, x2h_b, h2h_b, old_h)
+        new_h = outputs[0]
+        variables = outputs[1:] + [old_h, x, x2h_w, h2h_w]
+        ctx.save_for_backward(*variables)
+
+        return new_h
+
+    @staticmethod
+    def backward(ctx, grad_hy):
+        grad_input_weights, grad_hidden_weights, grad_input_bias, grad_hidden_bias, grad_hx = gru_cuda.backward(
+            grad_hy.contiguous(), *ctx.saved_variables
+        )
+
+        return None, grad_input_weights, grad_hidden_weights, grad_input_bias, grad_hidden_bias, grad_hx
+
+
+class GRUCell(nn.Module):
+    def __init__(self, input_features, state_size):
+        super(GRUCell, self).__init__()
+        self.input_features = input_features
+        self.state_size = state_size
+        self.x2h_weights = nn.Parameter(torch.Tensor(3 * state_size, input_features))
+        self.h2h_weights = nn.Parameter(torch.Tensor(3 * state_size, state_size))
+        self.x2h_bias = nn.Parameter(torch.Tensor(1, 3 * state_size))
+        self.h2h_bias = nn.Parameter(torch.Tensor(1, 3 * state_size))
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        std = 1.0 / math.sqrt(self.state_size)
+        for w in self.parameters():
+            w.data.uniform_(-std, std)
+
+    def forward(self, input, state):
+        input = input.view(-1, input.size(1))
+
+        return GRUFunction.apply(
+            input, 
+            self.x2h_weights, self.h2h_weights,
+            self.x2h_bias, self.h2h_bias,
+            state    
+        )
+
+
+class GRU(nn.Module):
+    def __init__(self, input_size, hidden_size, num_layers=1, batch_first=False, bidirectional=False):
+        super(GRU, self).__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.batch_first = batch_first
+        self.bidirectional = bidirectional
+        
+        # Create GRU cells for each layer
+        self.cells = nn.ModuleList()
+        for layer in range(num_layers):
+            for direction in range(1 + int(bidirectional)):
+                layer_input_size = input_size if layer == 0 else hidden_size * (1 + int(bidirectional))
+                self.cells.append(GRUCell(layer_input_size, hidden_size))
+        
+    def forward(self, input, hx=None):
+        # Ensure input is of shape [seq_len, batch, input_size]
+        if self.batch_first:
+            input = input.transpose(0, 1)
+        
+        seq_len, batch_size, _ = input.size()
+        num_directions = 2 if self.bidirectional else 1
+        
+        if hx is None:
+            hx = torch.zeros(self.num_layers * num_directions, batch_size, self.hidden_size, 
+                             dtype=input.dtype, device=input.device)
+        
+        # Reshape hx to (num_layers * num_directions, batch_size, hidden_size)
+        hx = hx.view(self.num_layers, num_directions, batch_size, self.hidden_size)
+        
+        output = []
+        
+        for layer in range(self.num_layers):
+            layer_output = []
+            for direction in range(num_directions):
+                idx = layer * num_directions + direction
+                layer_hx = hx[layer, direction]
+                
+                if direction == 0:
+                    seq_iter = range(seq_len)
+                else:
+                    seq_iter = range(seq_len - 1, -1, -1)
+                
+                for t in seq_iter:
+                    layer_input = input[t] if layer == 0 else layer_output[-1][:, :self.hidden_size] if direction == 0 else layer_output[-1][:, self.hidden_size:]
+                    layer_hx = self.cells[idx](layer_input, layer_hx)
+                    layer_output.append(layer_hx)
+            
+            layer_output = torch.stack(layer_output, dim=0)
+            if direction == 1:
+                layer_output = layer_output.flip(0)
+            
+            if self.bidirectional:
+                layer_output = torch.cat([layer_output, layer_output.flip(0)], dim=2)
+            
+            input = layer_output
+            output.append(layer_output)
+        
+        output = output[-1]  # Use the output from the last layer
+        
+        if self.batch_first:
+            output = output.transpose(0, 1)
+        
+        # Reshape hx back to (num_layers * num_directions, batch_size, hidden_size)
+        hx = hx.transpose(0, 1).contiguous().view(-1, batch_size, self.hidden_size)
+        
+        return output, hx
+
+====================================================================================================
+
+
+====================================================================================================
+
+File: transformers.py
+Directory: ./models
+
+Content:
+
+
+====================================================================================================
+
+
+====================================================================================================
+
+File: parallelgrus.py
+Directory: ./models
+
+Content:
+import torch
+import matplotlib.pyplot as plt
+from torch import nn
+import matplotlib.cm as cm
+
+class Flipper(nn.Module):
+    def forward(self, x):
+        return x.transpose(1, 2)
+
+class TrainableHState(nn.Module):
+    def __init__(self, dim):
+        super(TrainableHState, self).__init__()
+        self.h = nn.Parameter(torch.randn(1, dim, 1))
+
+    def forward(self, x):
+        b, _, l = x.shape
+        return self.h.expand(b, -1, l)
+
+class ParallelGRULayer(nn.Module):
+    def __init__(self, num_filters, num_recurrent_steps=3, h_init_mode='trainable', mixer=True, mixer_amount=25,
+                 norm='batch'):
+        super(ParallelGRULayer, self).__init__()
+        self.s2szx = nn.Conv1d(num_filters, num_filters, 1)
+        self.s2szh = nn.Conv1d(num_filters, num_filters, 1)
+        self.s2srx = nn.Conv1d(num_filters, num_filters, 1)
+        self.s2srh = nn.Conv1d(num_filters, num_filters, 1)
+        self.s2snx = nn.Conv1d(num_filters, num_filters, 1)
+        self.s2snh = nn.Conv1d(num_filters, num_filters, 1)
+        self.recurrent_steps = num_recurrent_steps
+        self.norms = nn.ModuleList([nn.BatchNorm1d(num_filters) for _ in range(num_recurrent_steps)])
+        self.hinit = TrainableHState(num_filters)
+        
+        self.mixer = nn.Sequential(nn.Conv1d(num_filters, num_filters, mixer_amount, padding=mixer_amount // 2), nn.ReLU())
+    
+    def forward(self, x):
+        h = torch.zeros_like(x)
+        h = self.hinit(h)
+        for i in range(self.recurrent_steps):
+            h = self.mixer(h)
+            zt = torch.sigmoid(self.s2szx(x) + self.s2szh(h))
+            rt = torch.sigmoid(self.s2srx(x) + self.s2srh(h))
+            nt = torch.tanh(self.s2snx(x) + self.s2snh(h * rt))
+            h = (1 - zt) * h + zt * nt
+            x = x[:,:,1:]
+            h = h[:,:,:-1]
+            h = self.norms[i](h)
+        return h
+
+
+# removing the zeros_like has a tiny effect on latency and throughput
+class ParallelGRULayerv4(nn.Module):
+    def __init__(self, num_filters, num_recurrent_steps=3, mixer_amount=25):
+        super(ParallelGRULayerv4, self).__init__()
+        self.s2szx = nn.Conv1d(num_filters, num_filters, 1)
+        self.s2szh = nn.Conv1d(num_filters, num_filters, 1)
+        self.s2srx = nn.Conv1d(num_filters, num_filters, 1)
+        self.s2srh = nn.Conv1d(num_filters, num_filters, 1)
+        self.s2snx = nn.Conv1d(num_filters, num_filters, 1)
+        self.s2snh = nn.Conv1d(num_filters, num_filters, 1)
+        self.recurrent_steps = num_recurrent_steps
+        self.norm = nn.BatchNorm1d(num_filters)
+        self.hinit = TrainableHState(num_filters)
+        
+        self.mixer = nn.Sequential(nn.Conv1d(num_filters, num_filters, mixer_amount, padding=mixer_amount // 2), nn.ReLU())
+    
+    def forward(self, x):
+        # h = torch.zeros_like(x)
+        h = self.hinit(x)
+        for i in range(self.recurrent_steps):
+            h = self.mixer(h)
+            zt = torch.sigmoid(self.s2szx(x) + self.s2szh(h))
+            rt = torch.sigmoid(self.s2srx(x) + self.s2srh(h))
+            nt = torch.tanh(self.s2snx(x) + self.s2snh(h * rt))
+            h = (1 - zt) * h + zt * nt
+            x = x[:,:,1:]
+            h = h[:,:,:-1]
+        h = self.norm(h)
+        return h
+    
+
+# removing the zeros_like has a tiny effect on latency and throughput
+class ParallelGRULayerv2(nn.Module):
+    def __init__(self, num_filters, num_recurrent_steps=3, mixer_amount=25):
+        super(ParallelGRULayerv2, self).__init__()
+        self.s2szx = nn.Conv1d(num_filters, num_filters, 1)
+        self.s2szh = nn.Conv1d(num_filters, num_filters, 1)
+        self.s2srx = nn.Conv1d(num_filters, num_filters, 1)
+        self.s2srh = nn.Conv1d(num_filters, num_filters, 1)
+        self.s2snx = nn.Conv1d(num_filters, num_filters, 1)
+        self.s2snh = nn.Conv1d(num_filters, num_filters, 1)
+        self.recurrent_steps = num_recurrent_steps
+        self.norms = nn.ModuleList([nn.BatchNorm1d(num_filters) for _ in range(num_recurrent_steps)])
+        self.hinit = TrainableHState(num_filters)
+        
+        self.mixer = nn.Sequential(nn.Conv1d(num_filters, num_filters, mixer_amount, padding=mixer_amount // 2), nn.ReLU())
+    
+    def forward(self, x):
+        # h = torch.zeros_like(x)
+        h = self.hinit(x)
+        for i in range(self.recurrent_steps):
+            h = self.mixer(h)
+            zt = torch.sigmoid(self.s2szx(x) + self.s2szh(h))
+            rt = torch.sigmoid(self.s2srx(x) + self.s2srh(h))
+            nt = torch.tanh(self.s2snx(x) + self.s2snh(h * rt))
+            h = (1 - zt) * h + zt * nt
+            x = x[:,:,1:]
+            h = h[:,:,:-1]
+            h = self.norms[i](h)
+        return h
+
+# removing z and r gates has a massive effect on throughput, almost doubling it
+class ParallelGRULayerv3(nn.Module):
+    def __init__(self, num_filters, num_recurrent_steps=3, mixer_amount=25):
+        super(ParallelGRULayerv3, self).__init__()
+        self.s2szx = nn.Conv1d(num_filters, num_filters, 1)
+        self.s2szh = nn.Conv1d(num_filters, num_filters, 1)
+        self.s2srx = nn.Conv1d(num_filters, num_filters, 1)
+        self.s2srh = nn.Conv1d(num_filters, num_filters, 1)
+        self.s2snx = nn.Conv1d(num_filters, num_filters, 1)
+        self.s2snh = nn.Conv1d(num_filters, num_filters, 1)
+        self.recurrent_steps = num_recurrent_steps
+        self.norms = nn.ModuleList([nn.BatchNorm1d(num_filters) for _ in range(num_recurrent_steps)])
+        self.hinit = TrainableHState(num_filters)
+        
+        self.mixer = nn.Sequential(nn.Conv1d(num_filters, num_filters, mixer_amount, padding=mixer_amount // 2), nn.ReLU())
+    
+    def forward(self, x):
+        # h = torch.zeros_like(x)
+        h = self.hinit(x)
+        for i in range(self.recurrent_steps):
+            h = self.mixer(h)
+            # zt = torch.sigmoid(self.s2szx(x) + self.s2szh(h))
+            # rt = torch.sigmoid(self.s2srx(x) + self.s2srh(h))
+            rt, zt = 1, 1
+            nt = torch.tanh(self.s2snx(x) + self.s2snh(h * rt))
+            h = (1 - zt) * h + zt * nt
+            x = x[:,:,1:]
+            h = h[:,:,:-1]
+            h = self.norms[i](h)
+        return h
+
+    
+    # you can turn z and r into 1-dim outputs (simple gates) and it'll impact your model a lot
+# at small dims, but very little at big dims, it also hurts latency
+class ParallelGRULayerv1(nn.Module):
+    def __init__(self, num_filters, num_recurrent_steps=3, mixer_amount=25):
+        super(ParallelGRULayerv1, self).__init__()
+        self.s2szx = nn.Conv1d(num_filters, 1, 1)
+        self.s2szh = nn.Conv1d(num_filters, 1, 1)
+        self.s2srx = nn.Conv1d(num_filters, 1, 1)
+        self.s2srh = nn.Conv1d(num_filters, 1, 1)
+        self.s2snx = nn.Conv1d(num_filters, num_filters, 1)
+        self.s2snh = nn.Conv1d(num_filters, num_filters, 1)
+        self.recurrent_steps = num_recurrent_steps
+        self.norms = nn.ModuleList([nn.BatchNorm1d(num_filters) for _ in range(num_recurrent_steps)])
+        self.hinit = TrainableHState(num_filters)
+        
+        self.mixer = nn.Sequential(nn.Conv1d(num_filters, num_filters, mixer_amount, padding=mixer_amount // 2), nn.ReLU())
+    
+    def forward(self, x):
+        # h = torch.zeros_like(x)
+        h = self.hinit(x)
+        for i in range(self.recurrent_steps):
+            h = self.mixer(h)
+            zt = torch.sigmoid(self.s2szx(x) + self.s2szh(h))
+            rt = torch.sigmoid(self.s2srx(x) + self.s2srh(h))
+            nt = torch.tanh(self.s2snx(x) + self.s2snh(h * rt))
+            h = (1 - zt) * h + zt * nt
+            x = x[:,:,1:]
+            h = h[:,:,:-1]
+            h = self.norms[i](h)
+        return h
+    
+
+    # if we fuse all the s2s layers into the bare minimum (2), we get mild increases in
+# throughput at small dims, with higher latency at larger dims, and a drop-off of through
+# put at highest dim/bs (I think then we're relying more on memory transfers than on flops)
+class ParallelGRULayerv5(nn.Module):
+    def __init__(self, num_filters, num_recurrent_steps=3, mixer_amount=25):
+        super(ParallelGRULayerv5, self).__init__()
+        # self.s2szx = nn.Conv1d(num_filters, num_filters, 1)
+        # self.s2szh = nn.Conv1d(num_filters, num_filters, 1)
+        # self.s2srx = nn.Conv1d(num_filters, num_filters, 1)
+        # self.s2srh = nn.Conv1d(num_filters, num_filters, 1)
+        # self.s2snx = nn.Conv1d(num_filters, num_filters, 1)
+        # self.s2snh = nn.Conv1d(num_filters, num_filters, 1)
+
+        self.s2s1 = nn.Conv1d(num_filters*2, num_filters*2, 1)
+        self.s2s2 = nn.Conv1d(num_filters*2, num_filters, 1)
+
+        self.recurrent_steps = num_recurrent_steps
+        self.norm = nn.BatchNorm1d(num_filters)
+        self.hinit = TrainableHState(num_filters)
+        
+        self.mixer = nn.Sequential(nn.Conv1d(num_filters, num_filters, mixer_amount, padding=mixer_amount // 2), nn.ReLU())
+    
+    def forward(self, x):
+        # h = torch.zeros_like(x)
+        h = self.hinit(x)
+        for _ in range(self.recurrent_steps):
+            h = self.mixer(h)
+            zt, rt = torch.chunk(torch.sigmoid(self.s2s1(torch.cat((x, h), dim=1))), 2, dim=1)
+            # zt = torch.sigmoid(self.s2szx(x) + self.s2szh(h))
+            # rt = torch.sigmoid(self.s2srx(x) + self.s2srh(h))
+            # nt = torch.tanh(self.s2snx(x) + self.s2snh(h * rt))
+            nt = torch.tanh(self.s2s2(torch.cat((x, h*rt), dim=1)))
+            h = (1 - zt) * h + zt * nt
+            x = x[:,:,1:]
+            h = h[:,:,:-1]
+        h = self.norm(h)
+        return h
+
+
+
+# if we again turn zt and rt into 1dim outputs we get 1.something speedups
+class ParallelGRULayerv6(nn.Module):
+    def __init__(self, num_filters, num_recurrent_steps=3, mixer_amount=25):
+        super(ParallelGRULayerv6, self).__init__()
+
+        self.s2s1 = nn.Conv1d(num_filters*2, 2, 1)
+        self.s2s2 = nn.Conv1d(num_filters*2, num_filters, 1)
+
+        self.recurrent_steps = num_recurrent_steps
+        self.norm = nn.BatchNorm1d(num_filters)
+        self.hinit = TrainableHState(num_filters)
+        
+        self.mixer = nn.Sequential(nn.Conv1d(num_filters, num_filters, mixer_amount, padding=mixer_amount // 2), nn.ReLU())
+    
+    def forward(self, x):
+        h = self.hinit(x)
+        for _ in range(self.recurrent_steps):
+            h = self.mixer(h)
+            zt, rt = torch.chunk(torch.sigmoid(self.s2s1(torch.cat((x, h), dim=1))), 2, dim=1)
+            nt = torch.tanh(self.s2s2(torch.cat((x, h*rt), dim=1)))
+            h = (1 - zt) * h + zt * nt
+            x = x[:,:,1:]
+            h = h[:,:,:-1]
+        h = self.norm(h)
+        return h
+
+
+# if we then replace the tanh with a GELU... we hurt throughput by about 10%
+# if we then replace the tanh with a SiLU... it's a little less bad
+class ParallelGRULayerv7(nn.Module):
+    def __init__(self, num_filters, num_recurrent_steps=3, mixer_amount=25):
+        super(ParallelGRULayerv7, self).__init__()
+
+        self.s2s1 = nn.Conv1d(num_filters*2, 2, 1)
+        self.s2s2 = nn.Conv1d(num_filters*2, num_filters, 1)
+
+        self.recurrent_steps = num_recurrent_steps
+        self.norm = nn.BatchNorm1d(num_filters)
+        self.hinit = TrainableHState(num_filters)
+        self.act = nn.SiLU()
+        self.mixer = nn.Sequential(nn.Conv1d(num_filters, num_filters, mixer_amount, padding=mixer_amount // 2), nn.ReLU())
+    
+    def forward(self, x):
+        h = self.hinit(x)
+        for _ in range(self.recurrent_steps):
+            h = self.mixer(h)
+            zt, rt = torch.chunk(torch.sigmoid(self.s2s1(torch.cat((x, h), dim=1))), 2, dim=1)
+            nt = self.act(self.s2s2(torch.cat((x, h*rt), dim=1)))
+            h = (1 - zt) * h + zt * nt
+            x = x[:,:,1:]
+            h = h[:,:,:-1]
+        h = self.norm(h)
+        return h
+
+
+# if we then add groups to the convolutions, it doesn't have much of an impact
+class ParallelGRULayerv8(nn.Module):
+    def __init__(self, num_filters, num_recurrent_steps=3, mixer_amount=25):
+        super(ParallelGRULayerv8, self).__init__()
+
+        self.s2s1 = nn.Conv1d(num_filters*2, 2, 1, groups=2)
+        self.s2s2 = nn.Conv1d(num_filters*2, num_filters, 1, groups=4)
+
+        self.recurrent_steps = num_recurrent_steps
+        self.norm = nn.BatchNorm1d(num_filters)
+        self.hinit = TrainableHState(num_filters)
+        self.act = nn.SiLU()
+        self.mixer = nn.Sequential(nn.Conv1d(num_filters, num_filters, mixer_amount, padding=mixer_amount // 2), nn.ReLU())
+    
+    def forward(self, x):
+        h = self.hinit(x)
+        for _ in range(self.recurrent_steps):
+            h = self.mixer(h)
+            zt, rt = torch.chunk(torch.sigmoid(self.s2s1(torch.cat((x, h), dim=1))), 2, dim=1)
+            nt = self.act(self.s2s2(torch.cat((x, h*rt), dim=1)))
+            h = (1 - zt) * h + zt * nt
+            x = x[:,:,1:]
+            h = h[:,:,:-1]
+        h = self.norm(h)
+        return h
+
+class ParallelGRULayerv9(nn.Module):
+    def __init__(self, num_filters, num_recurrent_steps=3, h_init_mode='trainable', mixer=True, mixer_amount=25,
+                 norm='batch'):
+        super(ParallelGRULayerv9, self).__init__()
+        self.s2szx = nn.Conv1d(num_filters, num_filters, 1)
+        self.s2szh = nn.Conv1d(num_filters, num_filters, 1)
+        self.s2srx = nn.Conv1d(num_filters, num_filters, 1)
+        self.s2srh = nn.Conv1d(num_filters, num_filters, 1)
+        self.s2snx = nn.Conv1d(num_filters, num_filters, 1)
+        self.s2snh = nn.Conv1d(num_filters, num_filters, 1)
+        self.recurrent_steps = num_recurrent_steps
+        self.norms = nn.ModuleList([nn.BatchNorm1d(num_filters) for _ in range(num_recurrent_steps)])
+        self.hinit = TrainableHState(num_filters)
+        
+        self.mixer = nn.Sequential(nn.Conv1d(num_filters, num_filters, mixer_amount, padding=mixer_amount // 2), nn.ReLU())
+    
+    def forward(self, x):
+        h = torch.zeros_like(x)
+        h = self.hinit(h)
+        for i in range(self.recurrent_steps):
+            h = self.mixer(h)
+            zt = torch.sigmoid(self.s2szx(x) + self.s2szh(h))
+            rt = torch.sigmoid(self.s2srx(x) + self.s2srh(h))
+            nt = torch.tanh(self.s2snx(x) + self.s2snh(h * rt))
+            h = (1 - zt) * h + zt * nt
+            x = x[:,:,1:]
+            h = h[:,:,:-1]
+            h = self.norms[i](h)
+        return h
+
+
+====================================================================================================
+
+
+====================================================================================================
+
+File: __init__.py
+Directory: ./models
+
+Content:
+import torch
+from torch import nn
+import math
+
+
+
+class LocalTransformerEncoderLayer(nn.Module):
+    def __init__(self, d_model, nhead, dropout=0.1, window_size=512, causal=True, look_backward=1, look_forward=0):
+        super(LocalTransformerEncoderLayer, self).__init__()
+        self.heads = nn.ModuleList([
+            LocalAttention(
+                dim=d_model // nhead,  # Ensure the dimension per head is correct
+                window_size=window_size,
+                causal=causal,
+                look_backward=look_backward,
+                look_forward=look_forward,
+                dropout=dropout
+            ) for _ in range(nhead)
+        ])
+        self.nhead = nhead
+        self.d_model = d_model
+        self.query_linear = nn.Linear(d_model, d_model)
+        self.key_linear = nn.Linear(d_model, d_model)
+        self.value_linear = nn.Linear(d_model, d_model)
+        self.linear1 = nn.Linear(d_model, d_model * 4)
+        self.dropout = nn.Dropout(dropout)
+        self.linear2 = nn.Linear(d_model * 4, d_model)
+        self.norm1 = nn.LayerNorm(d_model)
+        self.norm2 = nn.LayerNorm(d_model)
+        self.dropout1 = nn.Dropout(dropout)
+        self.dropout2 = nn.Dropout(dropout)
+        self.activation = nn.ReLU()
+
+    def forward(self, src):
+        batch_size, seq_length, _ = src.size()
+        head_dim = self.d_model // self.nhead
+
+        # Compute queries, keys, and values
+        q = self.query_linear(src).view(batch_size, seq_length, self.nhead, head_dim)
+        k = self.key_linear(src).view(batch_size, seq_length, self.nhead, head_dim)
+        v = self.value_linear(src).view(batch_size, seq_length, self.nhead, head_dim)
+
+        # Apply local attention to each head
+        src = torch.cat([self.heads[i](q[:, :, i, :], k[:, :, i, :], v[:, :, i, :]) for i in range(self.nhead)], dim=-1)
+
+        # Combine the heads' outputs
+        src = src.view(batch_size, seq_length, self.d_model)
+
+        # Feedforward network
+        src2 = self.dropout1(src)
+        src = src + src2
+        src = self.norm1(src)
+        src2 = self.linear2(self.dropout(self.activation(self.linear1(src))))
+        src = src + self.dropout2(src2)
+        src = self.norm2(src)
+        return src
+
+====================================================================================================
+
+
+====================================================================================================
+
+File: grus.py
+Directory: ./models
+
+Content:
+# MIT License
+#
+# Copyright (c) 2020 Mehran Maghoumi
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+# ----------------------------------------------------------------------------------------------------------------------
+import torch
+import torch.jit as jit
+import torch.nn as nn
+from torch.nn import Parameter
+from typing import List, Tuple, Optional
+from torch import Tensor
+import math
+
+# ----------------------------------------------------------------------------------------------------------------------
+class JitGRUCell(jit.ScriptModule):
+    def __init__(self, input_size, hidden_size):
+        super(JitGRUCell, self).__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.weight_ih = Parameter(torch.Tensor(3 * hidden_size, input_size))
+        self.weight_hh = Parameter(torch.Tensor(3 * hidden_size, hidden_size))
+        self.bias_ih = Parameter(torch.Tensor(3 * hidden_size))
+        self.bias_hh = Parameter(torch.Tensor(3 * hidden_size))
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        stdv = 1.0 / math.sqrt(self.hidden_size)
+        for weight in self.parameters():
+            weight.data.uniform_(-stdv, stdv)
+
+    @jit.script_method
+    def forward(self, x, hidden):
+        # type: (Tensor, Tensor) -> Tensor
+        x = x.view(-1, x.size(1))
+        x_results = torch.mm(x, self.weight_ih.t()) + self.bias_ih
+        h_results = torch.mm(hidden, self.weight_hh.t()) + self.bias_hh
+
+        i_r, i_z, i_n = x_results.chunk(3, 1)
+        h_r, h_z, h_n = h_results.chunk(3, 1)
+
+        r = torch.sigmoid(i_r + h_r)
+        z = torch.sigmoid(i_z + h_z)
+        n = torch.tanh(i_n + r * h_n)
+
+        return n - torch.mul(n, z) + torch.mul(z, hidden)
+
+# ----------------------------------------------------------------------------------------------------------------------
+class JitGRULayer(jit.ScriptModule):
+    def __init__(self, cell, *cell_args):
+        super(JitGRULayer, self).__init__()
+        self.cell = cell(*cell_args)
+
+    @jit.script_method
+    def forward(self, x, hidden):
+        # type: (Tensor, Tensor) -> Tuple[Tensor, Tensor]
+        inputs = x.unbind(0)
+        outputs = torch.jit.annotate(List[Tensor], [])
+
+        for i in range(len(inputs)):
+            hidden = self.cell(inputs[i], hidden)
+            outputs += [hidden]
+
+        return torch.stack(outputs), hidden
+
+# ----------------------------------------------------------------------------------------------------------------------
+class JitGRU(jit.ScriptModule):
+    __constants__ = ['hidden_size', 'num_layers', 'batch_first', 'layers']
+
+    def __init__(self, input_size, hidden_size, num_layers, batch_first=False, bias=True):
+        super(JitGRU, self).__init__()
+        # The following are not implemented.
+        assert bias
+
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.batch_first = batch_first
+
+        if num_layers == 1:
+            self.layers = nn.ModuleList([JitGRULayer(JitGRUCell, input_size, hidden_size)])
+        else:
+            self.layers = nn.ModuleList([JitGRULayer(JitGRUCell, input_size, hidden_size)] + [JitGRULayer(JitGRUCell, hidden_size, hidden_size)
+                                                                                              for _ in range(num_layers - 1)])
+
+    @jit.script_method
+    def forward(self, x, h=None):
+        # type: (Tensor, Optional[Tensor]) -> Tuple[Tensor, Tensor]
+        output_states = jit.annotate(List[Tensor], [])
+
+        # Handle batch_first cases
+        if self.batch_first:
+            x = x.permute(1, 0, 2)
+
+        if h is None:
+            h = torch.zeros(self.num_layers, x.shape[1], self.hidden_size, dtype=x.dtype, device=x.device)
+
+        output = x
+        i = 0
+
+        for rnn_layer in self.layers:
+            output, hidden = rnn_layer(output, h[i])
+            output_states += [hidden]
+            i += 1
+
+        # Don't forget to handle batch_first cases for the output too!
+        if self.batch_first:
+            output = output.permute(1, 0, 2)
+
+        return output, torch.stack(output_states)
+    
+
+class GRU(nn.Module):
+    """
+    Gated recurrent unit which has the following update rule:
+        rt​ = σ(W_xr * ​xt​ + b_xr​ + W_hr * ​h(t−1) ​+ b_hr​)
+        zt​ = σ(W_xz * ​xt​ + b_xz​ + W_hz * ​h(t−1) ​+ b_hz​)
+        nt​ = tanh(W_xn * ​xt ​+ b_xn ​+ rt​(W_hn * ​h(t−1) ​+ b_hn​))
+        ht​ = (1 − zt​) ⊙ nt ​+ zt​ ⊙ h(t−1)​​
+    """
+    def __init__(self, input_size, hidden_size):
+        super(GRU, self).__init__()
+
+        self.hidden_size = hidden_size
+        self.input_size = input_size
+        
+        # GRU parameters
+        self.weight_xh = nn.Parameter(torch.Tensor(input_size, 3 * hidden_size))
+        self.weight_hh = nn.Parameter(torch.Tensor(hidden_size, 3 * hidden_size))
+        self.bias_xh = nn.Parameter(torch.Tensor(3 * hidden_size))
+        self.bias_hh = nn.Parameter(torch.Tensor(3 * hidden_size))
+
+        # Initialize parameters
+        self.reset_params()
+
+    def reset_params(self):
+        """
+        Initialize network parameters.
+        """
+        std = 1.0 / math.sqrt(self.hidden_size)
+        self.weight_xh.data.uniform_(-std, std)
+        self.weight_hh.data.uniform_(-std, std)
+        self.bias_xh.data.uniform_(-std, std)
+        self.bias_hh.data.uniform_(-std, std)
+
+    def forward(self, x):
+        """
+        Args:
+            x: input with shape (N, T, D) where N is number of samples, T is
+                number of timestep and D is input size which must be equal to
+                self.input_size.
+
+        Returns:
+            y: output with a shape of (N, T, H) where H is hidden size
+        """
+
+        # Transpose input for efficient vectorized calculation. After transposing
+        # the input will have (T, N, D).
+        x = x.transpose(0, 1)
+        # Unpack dimensions
+        T, N, D = x.shape
+        H = self.hidden_size
+        
+        # Initialize hidden states to zero
+        h = torch.zeros(T, N, H, device=x.device)
+        ht_1 = torch.zeros(N, H, device=x.device)
+
+        for t in range(T):
+            # GRU update rule
+            xh = torch.addmm(self.bias_xh, x[t], self.weight_xh) 
+            hh = torch.addmm(self.bias_hh, ht_1, self.weight_hh)
+            rt = torch.sigmoid(xh[:, 0:H] + hh[:, 0:H])
+            zt = torch.sigmoid(xh[:, H:2*H] + hh[:, H:2*H])
+            nt = torch.tanh(xh[:, 2*H:3*H] + rt * hh[:, 2*H:3*H])
+            ht = (1 - zt) * nt + zt * ht_1
+
+            # Store hidden state for the current timestep
+            h[t] = ht
+
+            # For next iteration ht-1 will be current ht
+            ht_1 = ht
+
+        # Switch time and batch dimension, (T, N, H) -> (N, T, H)
+        y = h.transpose(0, 1)
+        return y
+
+====================================================================================================
+
+
+====================================================================================================
+
+File: abl_grus.py
+Directory: ./models
+
+Content:
+
+import torch
+import torch.jit as jit
+import torch.nn as nn
+from torch.nn import Parameter
+from typing import List, Tuple, Optional
+from torch import Tensor
+import math
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+class JitGRUCellNoz(jit.ScriptModule):
+    def __init__(self, input_size, hidden_size):
+        super(JitGRUCellNoz, self).__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.weight_ih = Parameter(torch.Tensor(2 * hidden_size, input_size))
+        self.weight_hh = Parameter(torch.Tensor(2 * hidden_size, hidden_size))
+        self.bias_ih = Parameter(torch.Tensor(2 * hidden_size))
+        self.bias_hh = Parameter(torch.Tensor(2 * hidden_size))
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        stdv = 1.0 / math.sqrt(self.hidden_size)
+        for weight in self.parameters():
+            weight.data.uniform_(-stdv, stdv)
+
+    @jit.script_method
+    def forward(self, x, hidden):
+        # type: (Tensor, Tensor) -> Tensor
+        x = x.view(-1, x.size(1))
+        x_results = torch.mm(x, self.weight_ih.t()) + self.bias_ih
+        h_results = torch.mm(hidden, self.weight_hh.t()) + self.bias_hh
+
+        i_r, i_n = x_results.chunk(2, 1)
+        h_r, h_n = h_results.chunk(2, 1)
+
+        r = torch.sigmoid(i_r + h_r)
+        n = torch.tanh(i_n + r * h_n)
+
+        return n
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+class JitGRUCellNor(jit.ScriptModule):
+    def __init__(self, input_size, hidden_size):
+        super(JitGRUCellNor, self).__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.weight_ih = Parameter(torch.Tensor(2 * hidden_size, input_size))
+        self.weight_hh = Parameter(torch.Tensor(2 * hidden_size, hidden_size))
+        self.bias_ih = Parameter(torch.Tensor(2 * hidden_size))
+        self.bias_hh = Parameter(torch.Tensor(2 * hidden_size))
+        self.bias_n = Parameter(torch.Tensor(hidden_size))
+        self.bias_z = Parameter(torch.Tensor(hidden_size))
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        stdv = 1.0 / math.sqrt(self.hidden_size)
+        for weight in self.parameters():
+            weight.data.uniform_(-stdv, stdv)
+
+    @jit.script_method
+    def forward(self, x, hidden):
+        # type: (Tensor, Tensor) -> Tensor
+        x = x.view(-1, x.size(1))
+        x_results = torch.mm(x, self.weight_ih.t()) + self.bias_ih
+        h_results = torch.mm(hidden, self.weight_hh.t()) + self.bias_hh
+
+        i_z, i_n = x_results.chunk(2, 1)
+        h_z, h_n = h_results.chunk(2, 1)
+
+        z = torch.sigmoid(i_z + h_z + self.bias_z)
+        n = torch.tanh(i_n + h_n + self.bias_n)
+
+        return n - torch.mul(n, z) + torch.mul(z, hidden)
+
+# ----------------------------------------------------------------------------------------------------------------------
+class JitGRUCellNozr(jit.ScriptModule):
+    def __init__(self, input_size, hidden_size):
+        super(JitGRUCellNozr, self).__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.weight_ih = Parameter(torch.Tensor(hidden_size, input_size))
+        self.weight_hh = Parameter(torch.Tensor(hidden_size, hidden_size))
+        self.bias_ih = Parameter(torch.Tensor(hidden_size))
+        self.bias_hh = Parameter(torch.Tensor(hidden_size))
+        self.bias_n = Parameter(torch.Tensor(hidden_size))
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        stdv = 1.0 / math.sqrt(self.hidden_size)
+        for weight in self.parameters():
+            weight.data.uniform_(-stdv, stdv)
+
+    @jit.script_method
+    def forward(self, x, hidden):
+        # type: (Tensor, Tensor) -> Tensor
+        x = x.view(-1, x.size(1))
+        i_n = torch.mm(x, self.weight_ih.t()) + self.bias_ih
+        h_n = torch.mm(hidden, self.weight_hh.t()) + self.bias_hh
+        n = torch.tanh(i_n + h_n + self.bias_n)
+
+        return n
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+class JitGRUCellOnezr(jit.ScriptModule):
+    def __init__(self, input_size, hidden_size):
+        super(JitGRUCellOnezr, self).__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.weight_ih = Parameter(torch.Tensor(hidden_size + 2, input_size))
+        self.weight_hh = Parameter(torch.Tensor(hidden_size + 2, hidden_size))
+        self.bias_ih = Parameter(torch.Tensor(hidden_size + 2))
+        self.bias_hh = Parameter(torch.Tensor(hidden_size + 2))
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        stdv = 1.0 / math.sqrt(self.hidden_size)
+        for weight in self.parameters():
+            weight.data.uniform_(-stdv, stdv)
+
+    @jit.script_method
+    def forward(self, x, hidden):
+        # type: (Tensor, Tensor) -> Tensor
+        x = x.view(-1, x.size(1))
+        x_results = torch.mm(x, self.weight_ih.t()) + self.bias_ih
+        h_results = torch.mm(hidden, self.weight_hh.t()) + self.bias_hh
+        i_r, i_z, i_n = x_results[:,:self.hidden_size], x_results[:,-2:-1], x_results[:,-1:]
+        h_r, h_z, h_n = h_results[:,:self.hidden_size], h_results[:,-2:-1], h_results[:,-1:]
+
+        r = torch.sigmoid(i_r + h_r)
+        z = torch.sigmoid(i_z + h_z)
+        n = torch.tanh(i_n + r * h_n)
+
+        return n - torch.mul(n, z) + torch.mul(z, hidden)
+
+# ----------------------------------------------------------------------------------------------------------------------
+class JitGRULayer(jit.ScriptModule):
+    def __init__(self, cell, *cell_args):
+        super(JitGRULayer, self).__init__()
+        self.cell = cell(*cell_args)
+
+    @jit.script_method
+    def forward(self, x, hidden):
+        # type: (Tensor, Tensor) -> Tuple[Tensor, Tensor]
+        inputs = x.unbind(0)
+        outputs = torch.jit.annotate(List[Tensor], [])
+
+        for i in range(len(inputs)):
+            hidden = self.cell(inputs[i], hidden)
+            outputs += [hidden]
+
+        return torch.stack(outputs), hidden
+
+# ----------------------------------------------------------------------------------------------------------------------
+class JitGRUAblations(jit.ScriptModule):
+    __constants__ = ['hidden_size', 'num_layers', 'batch_first', 'layers']
+
+    def __init__(self, input_size, hidden_size, num_layers, cell_class, batch_first=False, bias=True):
+        super(JitGRUAblations, self).__init__()
+        # The following are not implemented.
+        assert bias
+
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.batch_first = batch_first
+
+        if num_layers == 1:
+            self.layers = nn.ModuleList([JitGRULayer(cell_class, input_size, hidden_size)])
+        else:
+            self.layers = nn.ModuleList([JitGRULayer(cell_class, input_size, hidden_size)] + [JitGRULayer(cell_class, hidden_size, hidden_size)
+                                                                                              for _ in range(num_layers - 1)])
+
+    @jit.script_method
+    def forward(self, x, h=None):
+        # type: (Tensor, Optional[Tensor]) -> Tuple[Tensor, Tensor]
+        output_states = jit.annotate(List[Tensor], [])
+
+        # Handle batch_first cases
+        if self.batch_first:
+            x = x.permute(1, 0, 2)
+
+        if h is None:
+            h = torch.zeros(self.num_layers, x.shape[1], self.hidden_size, dtype=x.dtype, device=x.device)
+
+        output = x
+        i = 0
+
+        for rnn_layer in self.layers:
+            output, hidden = rnn_layer(output, h[i])
+            output_states += [hidden]
+            i += 1
+
+        # Don't forget to handle batch_first cases for the output too!
+        if self.batch_first:
+            output = output.permute(1, 0, 2)
+
+        return output, torch.stack(output_states)
+
+from functools import partial
+def get_jitgru_ablations(ablname, input_size, hidden_size):
+    if ablname == 'noz':
+        return JitGRUAblations(input_size, hidden_size, 1, JitGRUCellNoz, batch_first=True)
+    if ablname == 'nor':
+        return JitGRUAblations(input_size, hidden_size, 1, JitGRUCellNor, batch_first=True)
+    if ablname == 'nozr':
+        return JitGRUAblations(input_size, hidden_size, 1, JitGRUCellNozr, batch_first=True)
+    if ablname == 'onezr':
+        return JitGRUAblations(input_size, hidden_size, 1, JitGRUCellOnezr, batch_first=True)
+
+
+if __name__ == '__main__':
+    import torch
+
+    # Set input dimensions and hidden size
+    input_size = 10
+    hidden_size = 20
+    sequence_length = 5
+    batch_size = 3
+
+    # Create random input data and initial hidden state
+    x = torch.randn(batch_size, sequence_length, input_size)
+    h = torch.randn(1, batch_size, hidden_size)
+
+    # Instantiate the models
+    model_noz = get_jitgru_ablations('noz', input_size, hidden_size)
+    model_nor = get_jitgru_ablations('nor', input_size, hidden_size)
+    model_nozr = get_jitgru_ablations('nozr', input_size, hidden_size)
+    model_onezr = get_jitgru_ablations('onezr', input_size, hidden_size)
+
+    # Run a forward pass
+    output_noz, hidden_noz = model_noz(x, h)
+    output_nor, hidden_nor = model_nor(x, h)
+    output_nozr, hidden_nozr = model_nozr(x, h)
+    output_onezr, hidden_onezr = model_onezr(x, h)
+
+    print(f"Output NOZ: {output_noz.shape}, Hidden NOZ: {hidden_noz.shape}")
+    print(f"Output NOR: {output_nor.shape}, Hidden NOR: {hidden_nor.shape}")
+    print(f"Output NOZR: {output_nozr.shape}, Hidden NOZR: {hidden_nozr.shape}")
+    print(f"Output ONEZR: {output_onezr.shape}, Hidden ONEZR: {hidden_onezr.shape}")
+
+====================================================================================================
+
+
+====================================================================================================
+
+File: llms.py
+Directory: ./models
+
+Content:
+
+
+====================================================================================================
+
+
+====================================================================================================
+
+File: lstms.py
+Directory: ./models
+
+Content:
+import math
+import torch
+from torch import nn
+import torch.jit as jit
+from torch.nn import Parameter
+from typing import List, Tuple, Optional
+from torch import Tensor
+
+class LSTM(nn.Module):
+    """
+    Long short-term memory recurrent unit which has the following update rule:
+        it ​= σ(W_xi * ​xt ​+ b_xi ​+ W_hi * ​h(t−1) ​+ b_hi​)
+        ft​ = σ(W_xf * ​xt ​+ b_xf ​+ W_hf * ​h(t−1) ​+ b_hf​)
+        gt ​= tanh(W_xg * ​xt ​+ b_xg ​+ W_hg * ​h(t−1) ​+ b_hg​)
+        ot ​= σ(W_xo * ​xt ​+ b_xo​ + W_ho ​h(t−1) ​+ b_ho​)
+        ct ​= ft​ ⊙ c(t−1) ​+ it ​⊙ gt​
+        ht ​= ot​ ⊙ tanh(ct​)​
+    """
+    def __init__(self, input_size, hidden_size):
+        super(LSTM, self).__init__()
+
+        self.hidden_size = hidden_size
+
+        # LSTM parameters
+        # self.weight_xh = nn.Parameter(torch.Tensor(input_size, 4*hidden_size))
+        # self.weight_hh = nn.Parameter(torch.Tensor(hidden_size, 4*hidden_size))
+        # self.bias_xh = nn.Parameter(torch.Tensor(4*hidden_size))
+        # self.bias_hh = nn.Parameter(torch.Tensor(4*hidden_size))
+        self.weight_ih = nn.Parameter(torch.Tensor(4 * hidden_size, input_size))
+        self.weight_hh = nn.Parameter(torch.Tensor(4 * hidden_size, hidden_size))
+        self.bias_ih = nn.Parameter(torch.Tensor(4 * hidden_size))
+        self.bias_hh = nn.Parameter(torch.Tensor(4 * hidden_size))
+
+        # Initialize parameters
+        self.reset_params()
+
+    def reset_params(self):
+        std = 1.0 / math.sqrt(self.hidden_size)
+        for param in self.parameters():
+            nn.init.uniform_(param, -std, std)
+        # Initialize forget gate bias to 1
+        self.bias_ih.data[self.hidden_size:2*self.hidden_size].fill_(1.0)
+        self.bias_hh.data[self.hidden_size:2*self.hidden_size].fill_(1.0)
+
+    def forward(self, x):
+        """
+        Args:
+            x: input with shape (N, T, D) where N is number of samples, T is
+                number of timestep and D is input size which must be equal to
+                self.input_size.
+
+        Returns:
+            y: output with a shape of (N, T, H) where H is hidden size
+        """
+
+        # Transpose input for efficient vectorized calculation. After transposing
+        # the input will have (T, N, D).
+        x = x.transpose(0, 1)
+
+        # Unpack dimensions
+        T, N, H = x.shape[0], x.shape[1], self.hidden_size
+
+        # Initialize hidden and cell states to zero. There will be one hidden
+        # and cell state for each input, so they will have shape of (N, H)
+        h0 = torch.zeros(N, H, device=x.device)
+        c0 = torch.zeros(N, H, device=x.device)
+        
+        # Define a list to store outputs. We will then stack them.
+        y = []
+
+        ht_1 = h0
+        ct_1 = c0
+        for t in range(T):
+            # LSTM update rule
+            # xh = torch.addmm(self.bias_xh, x[t], self.weight_xh) 
+            # hh = torch.addmm(self.bias_hh, ht_1, self.weight_hh)
+            gates = x[t] @ self.weight_ih.t() + self.bias_ih + ht_1 @ self.weight_hh.t() + self.bias_hh
+            it, ft, gt, ot = gates.chunk(4, 1)
+            # add_res = xh + hh
+            it = torch.sigmoid(it)
+            ft = torch.sigmoid(ft)
+            gt = torch.tanh(gt)
+            ot = torch.sigmoid(ot)
+            ct = ft * ct_1 + it * gt
+            ht = ot * torch.tanh(ct)
+
+            # Store output
+            y.append(ht)
+
+            # For the next iteration c(t-1) and h(t-1) will be current ct and ht
+            ct_1 = ct
+            ht_1 = ht
+
+        # Stack the outputs. After this operation, output will have shape of
+        # (T, N, H)
+        y = torch.stack(y)
+
+        # Switch time and batch dimension, (T, N, H) -> (N, T, H)
+        y = y.transpose(0, 1)
+        return y, None
+
+
+class LSTMFaster(nn.Module):
+    """
+    Long short-term memory recurrent unit which has the following update rule:
+        it ​= σ(W_xi * ​xt ​+ b_xi ​+ W_hi * ​h(t−1) ​+ b_hi​)
+        ft​ = σ(W_xf * ​xt ​+ b_xf ​+ W_hf * ​h(t−1) ​+ b_hf​)
+        gt ​= tanh(W_xg * ​xt ​+ b_xg ​+ W_hg * ​h(t−1) ​+ b_hg​)
+        ot ​= σ(W_xo * ​xt ​+ b_xo​ + W_ho ​h(t−1) ​+ b_ho​)
+        ct ​= ft​ ⊙ c(t−1) ​+ it ​⊙ gt​
+        ht ​= ot​ ⊙ tanh(ct​)​
+    """
+    def __init__(self, input_size, hidden_size):
+        super(LSTMFaster, self).__init__()
+        '''
+        we're gonna compute the x multiplication with the matrix
+        in parallel before doing the rest of the operations
+        '''
+
+        self.hidden_size = hidden_size
+
+        # LSTM parameters
+        # self.weight_ih = nn.Parameter(torch.Tensor(4 * hidden_size, input_size))
+        # self.weight_hh = nn.Parameter(torch.Tensor(4 * hidden_size, hidden_size))
+        # self.bias_ih = nn.Parameter(torch.Tensor(4 * hidden_size))
+        # self.bias_hh = nn.Parameter(torch.Tensor(4 * hidden_size))
+        self.hh_layer = nn.Linear(input_size, 4 * hidden_size)
+        self.ih_layer = nn.Linear(input_size, 4 * hidden_size)
+
+        # Initialize parameters
+        self.reset_params()
+
+    def reset_params(self):
+        std = 1.0 / math.sqrt(self.hidden_size)
+        for param in self.parameters():
+            nn.init.uniform_(param, -std, std)
+        # Initialize forget gate bias to 1
+        # self.bias_ih.data[self.hidden_size:2*self.hidden_size].fill_(1.0)
+        # self.bias_hh.data[self.hidden_size:2*self.hidden_size].fill_(1.0)
+
+    def forward(self, x):
+        """
+        Args:
+            x: input with shape (N, T, D) where N is number of samples, T is
+                number of timestep and D is input size which must be equal to
+                self.input_size.
+
+        Returns:
+            y: output with a shape of (N, T, H) where H is hidden size
+        """
+
+        # Transpose input for efficient vectorized calculation. After transposing
+        # the input will have (T, N, D).
+        x = x.transpose(0, 1)
+
+        # Unpack dimensions
+        T, N, H = x.shape[0], x.shape[1], self.hidden_size
+
+        # Initialize hidden and cell states to zero. There will be one hidden
+        # and cell state for each input, so they will have shape of (N, H)
+        h0 = torch.zeros(N, H, device=x.device).type(x.dtype)
+        c0 = torch.zeros(N, H, device=x.device).type(x.dtype)
+        
+        # Define a list to store outputs. We will then stack them.
+        y = torch.zeros(T, N, H, device=x.device)
+
+        ht_1 = h0
+        ct_1 = c0
+        # print('initial x', x.shape)
+        xhs = self.ih_layer(x)
+        # print("hidden x's ", xhs.shape)
+        for t in range(T):
+            # LSTM update rule
+            # xh = torch.addmm(self.bias_xh, x[t], self.weight_xh)
+            # hh = torch.addmm(self.bias_hh, ht_1, self.weight_hh.t())
+            hh = self.hh_layer(ht_1)
+            # print("hh layer output", hh.shape)
+            # gates = x[t] @ self.weight_ih.t() + self.bias_ih + ht_1 @ self.weight_hh.t() + self.bias_hh
+            # it, ft, gt, ot = (xh + hh).chunk(4, 1)
+
+
+            # it, ft, ot, gt = (xhs[t] + hh).chunk(4, 1)
+            # it = torch.sigmoid(it)
+            # ft = torch.sigmoid(ft)
+            # ot = torch.sigmoid(ot)
+            # gt = torch.tanh(gt)
+
+            # it, ft, ot, gt = (xhs[t] + hh).chunk(4, 1)
+            v = xhs[t] + hh
+            # print("the v vector", v.shape)
+            g1, gt = torch.sigmoid(v[:,:3*H]), torch.tanh(v[:,3*H:])
+            # print("g1 and gt before chunking", g1.shape, gt.shape)
+            it, ft, ot = g1.chunk(3, 1)
+            # print("the 3 boys", it.shape)
+
+            # print("==>", ft.shape, ct_1.shape, it.shape, gt.shape)
+            ct = ft * ct_1 + it * gt
+            ht = ot * torch.tanh(ct)
+
+            # Store output
+            y[t] = ht
+
+            # For the next iteration c(t-1) and h(t-1) will be current ct and ht
+            ct_1 = ct
+            ht_1 = ht
+
+        # Switch time and batch dimension, (T, N, H) -> (N, T, H)
+        y = y.transpose(0, 1)
+        return y, None    
+
+class LSTMUnrolled(nn.Module):
+    """
+    Long short-term memory recurrent unit which has the following update rule:
+        it ​= σ(W_xi * ​xt ​+ b_xi ​+ W_hi * ​h(t−1) ​+ b_hi​)
+        ft​ = σ(W_xf * ​xt ​+ b_xf ​+ W_hf * ​h(t−1) ​+ b_hf​)
+        gt ​= tanh(W_xg * ​xt ​+ b_xg ​+ W_hg * ​h(t−1) ​+ b_hg​)
+        ot ​= σ(W_xo * ​xt ​+ b_xo​ + W_ho ​h(t−1) ​+ b_ho​)
+        ct ​= ft​ ⊙ c(t−1) ​+ it ​⊙ gt​
+        ht ​= ot​ ⊙ tanh(ct​)​
+    """
+    def __init__(self, input_size, hidden_size, sequence_length):
+        super(LSTMUnrolled, self).__init__()
+
+        self.hidden_size = hidden_size
+
+        # LSTM parameters
+        self.weight_ih = nn.Parameter(torch.Tensor(4 * hidden_size, input_size))
+        self.weight_hh = nn.Parameter(torch.Tensor(4 * hidden_size, hidden_size))
+        self.bias_ih = nn.Parameter(torch.Tensor(4 * hidden_size))
+        self.bias_hh = nn.Parameter(torch.Tensor(4 * hidden_size))
+
+        self.ih_weights = nn.ParameterList([self.weight_ih.clone() for _ in range(sequence_length)])
+        self.hh_weights = nn.ParameterList([self.weight_hh.clone() for _ in range(sequence_length)])
+        self.ih_biases = nn.ParameterList([self.bias_ih.clone() for _ in range(sequence_length)])
+        self.hh_biases = nn.ParameterList([self.bias_hh.clone() for _ in range(sequence_length)])
+
+        # Initialize parameters
+        self.reset_params()
+
+    def reset_params(self):
+        std = 1.0 / math.sqrt(self.hidden_size)
+        for param in self.parameters():
+            nn.init.uniform_(param, -std, std)
+        # Initialize forget gate bias to 1
+        self.bias_ih.data[self.hidden_size:2*self.hidden_size].fill_(1.0)
+        self.bias_hh.data[self.hidden_size:2*self.hidden_size].fill_(1.0)
+
+    def forward(self, x):
+        """
+        Args:
+            x: input with shape (N, T, D) where N is number of samples, T is
+                number of timestep and D is input size which must be equal to
+                self.input_size.
+
+        Returns:
+            y: output with a shape of (N, T, H) where H is hidden size
+        """
+
+        # Transpose input for efficient vectorized calculation. After transposing
+        # the input will have (T, N, D).
+        x = x.transpose(0, 1)
+
+        # Unpack dimensions
+        T, N, H = x.shape[0], x.shape[1], self.hidden_size
+
+        # Initialize hidden and cell states to zero. There will be one hidden
+        # and cell state for each input, so they will have shape of (N, H)
+        h0 = torch.zeros(N, H, device=x.device).type(x.dtype)
+        c0 = torch.zeros(N, H, device=x.device).type(x.dtype)
+        
+        # Define a list to store outputs. We will then stack them.
+        y = []
+
+        ht_1 = h0
+        ct_1 = c0
+        for t in range(T):
+            # LSTM update rule
+            # xh = torch.addmm(self.bias_xh, x[t], self.weight_xh) 
+            # hh = torch.addmm(self.bias_hh, ht_1, self.weight_hh)
+            weight_ih, weight_hh = self.ih_weights[t], self.hh_weights[t]
+            bias_ih, bias_hh = self.ih_biases[t], self.hh_biases[t]
+            gates = x[t] @ weight_ih + bias_ih + ht_1 @ weight_hh.t() + bias_hh
+            it, ft, gt, ot = gates.chunk(4, 1)
+            # add_res = xh + hh
+            it = torch.sigmoid(it)
+            ft = torch.sigmoid(ft)
+            gt = torch.tanh(gt)
+            ot = torch.sigmoid(ot)
+            ct = ft * ct_1 + it * gt
+            ht = ot * torch.tanh(ct)
+
+            # Store output
+            y.append(ht)
+
+            # For the next iteration c(t-1) and h(t-1) will be current ct and ht
+            ct_1 = ct
+            ht_1 = ht
+
+        # Stack the outputs. After this operation, output will have shape of
+        # (T, N, H)
+        y = torch.stack(y)
+
+        # Switch time and batch dimension, (T, N, H) -> (N, T, H)
+        y = y.transpose(0, 1)
+        return y, None
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+class JitLSTMCell(jit.ScriptModule):
+    def __init__(self, input_size, hidden_size, roll_amount=16):
+        super(JitLSTMCell, self).__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.weight_ih = Parameter(torch.Tensor(4 * hidden_size, input_size))
+        self.weight_hh = Parameter(torch.Tensor(4 * hidden_size, hidden_size))
+        self.bias_ih = Parameter(torch.Tensor(4 * hidden_size))
+        self.bias_hh = Parameter(torch.Tensor(4 * hidden_size))
+        self.roll_amount = roll_amount
+
+        self.reset_parameters()
+
+    # def reset_parameters(self):
+    #     # Initialize weights in LSTM style
+    #     stdv = 1.0 / math.sqrt(self.hidden_size)
+    #     for weight in self.parameters():
+    #         weight.data.uniform_(-stdv, stdv)     
+    def reset_parameters(self):
+        stdv = 1.0 / math.sqrt(self.hidden_size)
+
+        # Initialize weight matrices
+        self.weight_ih.data.uniform_(-stdv, stdv)
+        self.weight_hh.data.uniform_(-stdv, stdv)
+        
+        # Initialize biases to zero
+        self.bias_ih.data.zero_()
+        self.bias_hh.data.zero_()
+        
+        # Set forget gate biases to 1
+        # The gates are ordered as input, forget, cell, output
+        # So indices for forget gate are hidden_size to 2*hidden_size
+        self.bias_ih.data[self.hidden_size:2*self.hidden_size].fill_(1)
+        self.bias_hh.data[self.hidden_size:2*self.hidden_size].fill_(1)
+   
+    @jit.script_method
+    def forward(self, x, hx):
+        # type: (Tensor, Tuple[Tensor, Tensor]) -> Tuple[Tensor, Tensor]
+        x = x.view(-1, x.size(1))
+        h, c = hx  # Unpack the previous hidden and cell states
+        gates = (torch.mm(x, self.weight_ih.t()) + self.bias_ih) + (torch.mm(h, self.weight_hh.t()) + self.bias_hh)
+        
+        # Split the gates
+        i_gate, f_gate, g_gate, o_gate = gates.chunk(4, 1)
+        
+        # Activation functions
+        input_gate = torch.sigmoid(i_gate)
+        forget_gate = torch.sigmoid(f_gate)
+        cell_gate = torch.tanh(g_gate)
+        output_gate = torch.sigmoid(o_gate)
+        
+        # Update cell state
+        c_next = forget_gate * c + input_gate * cell_gate
+        # Compute the hidden state
+        h_next = output_gate * torch.tanh(c_next)
+        
+        # Return the new hidden state and cell state as a tuple
+        c_next = torch.roll(c_next, shifts=self.roll_amount, dims=1)
+        return h_next, c_next
+
+# ----------------------------------------------------------------------------------------------------------------------
+class JitLSTMLayer(jit.ScriptModule):
+    def __init__(self, cell, *cell_args):
+        super(JitLSTMLayer, self).__init__()
+        self.cell = cell(*cell_args)
+
+    @jit.script_method
+    def forward(self, x, hidden):
+        # type: (Tensor, Tuple[Tensor, Tensor]) -> Tuple[Tensor, Tuple[Tensor, Tensor]]
+        inputs = x.unbind(0)
+        outputs = torch.jit.annotate(List[Tensor], [])
+
+        h, c = hidden  # Unpack hidden state and cell state
+        for i in range(len(inputs)):
+            h, c = self.cell(inputs[i], (h, c))  # Update h and c
+            outputs += [h]
+
+        return torch.stack(outputs), (h, c)
+
+# ----------------------------------------------------------------------------------------------------------------------
+class JitLSTM(jit.ScriptModule):
+    __constants__ = ['hidden_size', 'num_layers', 'batch_first', 'layers']
+
+    def __init__(self, input_size, hidden_size, num_layers, batch_first=False, bias=True, roll_amount=16):
+        super(JitLSTM, self).__init__()
+        # The following are not implemented.
+        assert bias
+
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.batch_first = batch_first
+
+        if num_layers == 1:
+            self.layers = nn.ModuleList([JitLSTMLayer(JitLSTMCell, input_size, hidden_size)])
+        else:
+            self.layers = nn.ModuleList(
+                [JitLSTMLayer(JitLSTMCell, input_size, hidden_size, roll_amount=roll_amount)] +
+                [JitLSTMLayer(JitLSTMCell, hidden_size, hidden_size, roll_amount=roll_amount) for _ in range(num_layers - 1)]
+            )
+
+    @jit.script_method
+    def forward(self, x, hx=None):
+        # type: (Tensor, Optional[Tuple[Tensor, Tensor]]) -> Tuple[Tensor, Tuple[Tensor, Tensor]]
+
+        # Handle batch_first cases
+        if self.batch_first:
+            x = x.permute(1, 0, 2)
+
+        batch_size = x.size(1)
+
+        if hx is None:
+            zeros = torch.zeros(self.num_layers, batch_size, self.hidden_size, dtype=x.dtype, device=x.device)
+            h = zeros  # h_0
+            c = zeros  # c_0
+        else:
+            h, c = hx
+
+        h_n = []
+        c_n = []
+
+        output = x
+        i = 0
+        for rnn_layer in self.layers:
+            h_layer = h[i]
+            c_layer = c[i]
+
+            output, (h_layer, c_layer) = rnn_layer(output, (h_layer, c_layer))
+
+            h_n.append(h_layer)
+            c_n.append(c_layer)
+            i += 1
+
+        # Don't forget to handle batch_first cases for the output too!
+        if self.batch_first:
+            output = output.permute(1, 0, 2)
+
+        h_n_stacked = torch.stack(h_n, dim=0)
+        c_n_stacked = torch.stack(c_n, dim=0)
+
+        return output, (h_n_stacked, c_n_stacked)
+    
+
+class OptimizedCustomLSTM(nn.Module):
+    def __init__(self, input_size, hidden_size, batch_first=False, device='cpu'):
+        super(OptimizedCustomLSTM, self).__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.batch_first = batch_first
+        self.x_layer = nn.Linear(input_size, 4 * hidden_size, device=device)
+        self.h_layer = nn.Linear(hidden_size, 4 * hidden_size, device=device)
+        
+    def forward(self, x):
+        if not self.batch_first:
+            x = x.transpose(0, 1)
+        batch_size, seq_len, _ = x.size()
+        
+        # if hidden is None:
+        #     h_t = torch.zeros(batch_size, self.hidden_size, device=x.device)
+        #     c_t = torch.zeros(batch_size, self.hidden_size, device=x.device)
+        # else:
+        #     h_t, c_t = hidden
+        h_t = torch.zeros(batch_size, self.hidden_size, device=x.device)
+        c_t = torch.zeros(batch_size, self.hidden_size, device=x.device)
+        
+        x_gates = self.x_layer(x)
+        
+        outputs = []
+        
+        for t in range(seq_len):
+            h_gates = self.h_layer(h_t)
+            gates = x_gates[:, t, :] + h_gates
+            i_t, f_t, g_t, o_t = gates.chunk(4, dim=1)
+            i_t = torch.sigmoid(i_t)
+            f_t = torch.sigmoid(f_t)
+            g_t = torch.tanh(g_t)
+            o_t = torch.sigmoid(o_t)
+            c_t = f_t * c_t + i_t * g_t
+            h_t = o_t * torch.tanh(c_t)
+            outputs.append(h_t)
+        
+        outputs = torch.stack(outputs, dim=1)
+        return outputs, (h_t, c_t)
+
+class OptimizedCustomLSTM2(nn.Module):
+    def __init__(self, input_size, hidden_size, batch_first=False):
+        super(OptimizedCustomLSTM2, self).__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.batch_first = batch_first
+        self.combined_layer = nn.Linear(input_size + hidden_size, 4 * hidden_size)
+        
+    def forward(self, x):
+        if not self.batch_first:
+            x = x.transpose(0, 1)
+        batch_size, seq_len, _ = x.size()
+        
+        h_t = torch.zeros(batch_size, self.hidden_size).to(x.device)
+        c_t = torch.zeros(batch_size, self.hidden_size).to(x.device)
+        
+        outputs = []
+        
+        for t in range(seq_len):
+            x_t = x[:, t, :]
+            combined = torch.cat((x_t, h_t), dim=1)
+            gates = self.combined_layer(combined)
+            i_t, f_t, g_t, o_t = gates.chunk(4, dim=1)
+            i_t = torch.sigmoid(i_t)
+            f_t = torch.sigmoid(f_t)
+            g_t = torch.tanh(g_t)
+            o_t = torch.sigmoid(o_t)
+            c_t = f_t * c_t + i_t * g_t
+            h_t = o_t * torch.tanh(c_t)
+            outputs.append(h_t)
+        
+        outputs = torch.stack(outputs, dim=1)
+        return outputs, (h_t, c_t)
+
+
+class OptimizedCustomLSTM3(nn.Module):
+    def __init__(self, input_size, hidden_size, batch_first=False, device='cpu'):
+        super(OptimizedCustomLSTM3, self).__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.batch_first = batch_first
+        self.combined_layer = nn.Linear(input_size + hidden_size, 4 * hidden_size, device=device)
+        
+    def forward(self, x, hidden=None):
+        if not self.batch_first:
+            x = x.transpose(0, 1)
+        batch_size, seq_len, _ = x.size()
+        
+        if hidden is None:
+            h_t = torch.zeros(batch_size, self.hidden_size, device=x.device)
+            c_t = torch.zeros(batch_size, self.hidden_size, device=x.device)
+        else:
+            h_t, c_t = hidden
+        
+        outputs = []
+        
+        for t in range(seq_len):
+            x_t = x[:, t, :]
+            combined = torch.cat((x_t, h_t), dim=1)
+            gates = self.combined_layer(combined)
+            i_t, f_t, g_t, o_t = gates.chunk(4, dim=1)
+            i_t = torch.sigmoid(i_t)
+            f_t = torch.sigmoid(f_t)
+            g_t = torch.tanh(g_t)
+            o_t = torch.sigmoid(o_t)
+            c_t = f_t * c_t + i_t * g_t
+            h_t = o_t * torch.tanh(c_t)
+            outputs.append(h_t)
+        
+        outputs = torch.stack(outputs, dim=1)
+        return outputs, (h_t, c_t)
+
+====================================================================================================
+
