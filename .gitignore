@@ -1,0 +1,5 @@
+cudagru/build/*
+*.egg-info
+*.pyc
+*.csv
+*.egg

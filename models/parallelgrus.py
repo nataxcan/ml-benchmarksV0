@@ -1,7 +1,36 @@
 import torch
-import matplotlib.pyplot as plt
 from torch import nn
-import matplotlib.cm as cm
+
+'''
+
+all have mixer 25 and 
+
+gru layer basic:
+- 1 conv1d per gate (so there's 6)
+- a batch norm per recurrent step
+v2:
+- just removing zeros_like
+v4:
+- one batch norm
+- batch norm run once after all recurrent steps
+v3:
+- replaces z and r gates with the integer 1
+v1:
+- z and r gates are dim-1 outputs of the conv1d's
+v5:
+- all gates are computed with 2 conv1d's that are chunked, and we use concatenation
+- just one norm after recurrent steps (compare with v4)
+v6:
+- same as v5 the refactor
+- but then gates are scalar outputs of the conv1d now
+v7:
+- like v6 but with silu instead of tanh
+v8:
+- like v7 but with groups in the convolutions
+v9:
+- same as base pgru
+
+'''
 
 class Flipper(nn.Module):
     def forward(self, x):
